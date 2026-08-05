@@ -15,8 +15,9 @@ function makeFakeContext(tempStorage: string): vscode.ExtensionContext {
 	} as unknown as vscode.ExtensionContext;
 }
 
-// Stub out queryPackageInfo by monkey-patching the module cache.
-// We just need downloadPackage / ensurePackages to use our pinned CTAN responses.
+// Stub out CTAN queries by pre-populating PackageCache's in-memory resolver
+// cache. We just need downloadPackage / ensurePackages to use our pinned
+// CTAN responses without any network access.
 
 describe("PackageCache transitive discovery", () => {
 	let tempDir: string;
@@ -37,8 +38,9 @@ describe("PackageCache transitive discovery", () => {
 		// Force the preload sets to empty so our packages are never treated as preloaded.
 		// (Default behaviour: texlive-basic.js not found in fake extension → empty preload.)
 
-		// Stub queryPackageInfo via the same approach used elsewhere: directly
-		// populate the private cache.
+		// Stub queryPackageInfo by pre-populating the private in-memory CTAN
+		// query cache (module-level monkey-patching is not possible: esbuild
+		// compiles the exports into non-writable getters).
 		const fakeInfoAcronym: CtanPackageInfo = {
 			name: "acronym",
 			ctan: { path: "/macros/latex/contrib/acronym" },
@@ -47,11 +49,15 @@ describe("PackageCache transitive discovery", () => {
 			name: "suffix",
 			ctan: { path: "/macros/latex/contrib/bigfoot" },
 		};
-		// Inline stub: pre-populate the in-memory CTAN query cache.
 		// biome-ignore lint/suspicious/noExplicitAny: private access in tests
 		(cache as any).resolvedInfo.set("acronym", fakeInfoAcronym);
 		// biome-ignore lint/suspicious/noExplicitAny: private access in tests
 		(cache as any).resolvedInfo.set("suffix", fakeInfoSuffix);
+		// xstring has no cached files, so pin its CTAN response to null: the
+		// real API would otherwise be queried (and the package downloaded) over
+		// the network, making this test slow and flaky on CI.
+		// biome-ignore lint/suspicious/noExplicitAny: private access in tests
+		(cache as any).resolvedInfo.set("xstring", null);
 
 		// Pretend both packages are "downloaded" by writing the on-disk cache.
 		const pkgsDir = path.join(tempDir, "packages", "pkgs");
@@ -101,6 +107,10 @@ describe("PackageCache transitive discovery", () => {
 		assert.ok(
 			names.includes("suffix.sty"),
 			`expected suffix.sty in ${JSON.stringify(names)} (transitive discovery)`,
+		);
+		assert.ok(
+			!names.includes("xstring.sty"),
+			`expected no xstring.sty in ${JSON.stringify(names)} (not cached)`,
 		);
 	});
 });
