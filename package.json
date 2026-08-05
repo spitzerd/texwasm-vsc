@@ -1,0 +1,241 @@
+{
+  "name": "texwasm",
+  "displayName": "TeXWASM",
+  "description": "Compile LaTeX to PDF using WebAssembly — no local TeX distribution required",
+  "version": "0.1.0",
+  "publisher": "texwasm",
+  "icon": "images/icon.png",
+  "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/texwasm/texwasm-vsc"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "latex",
+    "tex",
+    "pdf",
+    "wasm",
+    "webassembly"
+  ],
+  "activationEvents": [
+    "onLanguage:latex"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "texwasm.compile",
+        "title": "TeXWASM: Compile LaTeX to PDF"
+      },
+      {
+        "command": "texwasm.compileWith",
+        "title": "TeXWASM: Compile with..."
+      },
+      {
+        "command": "texwasm.viewLog",
+        "title": "TeXWASM: View Log"
+      },
+      {
+        "command": "texwasm.clean",
+        "title": "TeXWASM: Clean Auxiliary Files"
+      },
+      {
+        "command": "texwasm.stop",
+        "title": "TeXWASM: Stop Compilation"
+      },
+      {
+        "command": "texwasm.downloadEngine",
+        "title": "TeXWASM: Download/Update Engine"
+      },
+      {
+        "command": "texwasm.synctexForward",
+        "title": "TeXWASM: Forward Search (SyncTeX)"
+      },
+      {
+        "command": "texwasm.clearPackageCache",
+        "title": "TeXWASM: Clear CTAN Package Cache"
+      },
+      {
+        "command": "texwasm.listPackageCache",
+        "title": "TeXWASM: List Cached Packages"
+      },
+      {
+        "command": "texwasm.rebuildFontIndex",
+        "title": "TeXWASM: Rebuild System Font Index"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "texwasm.compile",
+        "key": "ctrl+alt+b",
+        "when": "editorLangId == latex"
+      },
+      {
+        "command": "texwasm.synctexForward",
+        "key": "ctrl+alt+j",
+        "when": "editorLangId == latex"
+      }
+    ],
+    "configuration": {
+      "title": "TeXWASM",
+      "properties": {
+        "texwasm.engine": {
+          "type": "string",
+          "enum": [
+            "pdflatex",
+            "xelatex",
+            "lualatex"
+          ],
+          "default": "pdflatex",
+          "description": "Default LaTeX engine to use for compilation"
+        },
+        "texwasm.outputDirectory": {
+          "type": "string",
+          "default": "",
+          "description": "Output directory for the compiled PDF (relative to the .tex file)"
+        },
+        "texwasm.autoCompile": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically compile on save"
+        },
+        "texwasm.bibtexEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run bibliography processor automatically when citations are detected"
+        },
+        "texwasm.biblioBackend": {
+          "type": "string",
+          "enum": [
+            "bibtex8",
+            "biber"
+          ],
+          "default": "bibtex8",
+          "description": "Bibliography processor backend to use"
+        },
+        "texwasm.compilationPasses": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Maximum number of compilation passes"
+        },
+        "texwasm.autoDownloadPackages": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically download missing packages from CTAN"
+        },
+        "texwasm.includeExtraBundle": {
+          "type": "boolean",
+          "default": false,
+          "description": "Download and load the texlive-extra bundle (~331 MB) alongside texlive-basic. Disabling reduces first download to ~120 MB; missing packages are fetched from CTAN on demand."
+        },
+        "texwasm.rootDocument": {
+          "type": "string",
+          "default": "",
+          "description": "Path to the root LaTeX document (relative to workspace folder, or absolute). When set, this file is always compiled instead of the active editor. Leave empty for automatic root detection (% !TEX root, \\documentclass, workspace scan)."
+        },
+        "texwasm.tools": {
+          "type": "array",
+          "default": [
+            { "name": "pdflatex", "command": "pdflatex", "args": ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "%DOC%"] },
+            { "name": "xelatex", "command": "xelatex", "args": ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "%DOC%"] },
+            { "name": "lualatex", "command": "lualatex", "args": ["-synctex=1", "-interaction=nonstopmode", "-file-line-error", "%DOC%"] },
+            { "name": "bibtex", "command": "bibtex", "args": ["%DOCFILE%"] },
+            { "name": "biber", "command": "biber", "args": ["%DOCFILE%"] },
+            { "name": "makeindex", "command": "makeindex", "args": ["%DOCFILE%"] }
+          ],
+          "description": "Available tools for LaTeX recipes. Each tool has a name, command (pdflatex/xelatex/lualatex/bibtex/biber/makeindex), and args.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Unique tool identifier referenced by recipes" },
+              "command": { "type": "string", "enum": ["pdflatex", "xelatex", "lualatex", "bibtex", "bibtex8", "biber", "makeindex", "makeglossaries"], "description": "The command/tool type" },
+              "args": { "type": "array", "items": { "type": "string" }, "description": "Command-line arguments (supports placeholders: %DOC%, %DOCFILE%, %DIR%)" },
+              "env": { "type": "object", "additionalProperties": { "type": "string" }, "description": "Environment variables" }
+            },
+            "required": ["name", "command", "args"]
+          }
+        },
+        "texwasm.recipes": {
+          "type": "array",
+          "default": [
+            { "name": "pdflatex \u2022 bibtex \u2022 makeindex \u2022 pdflatex \u00d7 2", "tools": ["pdflatex", "bibtex", "makeindex", "pdflatex", "pdflatex"] },
+            { "name": "pdflatex \u00d7 2", "tools": ["pdflatex", "pdflatex"] },
+            { "name": "xelatex \u2022 bibtex \u2022 makeindex \u2022 xelatex \u00d7 2", "tools": ["xelatex", "bibtex", "makeindex", "xelatex", "xelatex"] },
+            { "name": "lualatex \u2022 bibtex \u2022 makeindex \u2022 lualatex \u00d7 2", "tools": ["lualatex", "bibtex", "makeindex", "lualatex", "lualatex"] }
+          ],
+          "description": "LaTeX recipes defining sequences of tools to run when building a project. Each recipe has a name and an ordered list of tool names (referencing texwasm.tools).",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string", "description": "Display name for the recipe" },
+              "tools": { "type": "array", "items": { "type": "string" }, "description": "Ordered list of tool names defined in texwasm.tools" }
+            },
+            "required": ["name", "tools"]
+          }
+        },
+        "texwasm.recipe.default": {
+          "type": "string",
+          "default": "first",
+          "description": "Which recipe to use by default for 'Compile LaTeX to PDF'. Set to 'first' to use the first recipe, 'lastUsed' to use the last selected recipe, or a specific recipe name from texwasm.recipes."
+        },
+        "texwasm.recipe.lastUsed": {
+          "type": "string",
+          "default": "",
+          "description": "Last used recipe name (set automatically by 'Compile with...' command)."
+        },
+        "texwasm.fontNameLookup": {
+          "type": "boolean",
+          "default": true,
+          "description": "Rewrite font name references in \\setmainfont, \\setsansfont, \\setmonofont, \\newfontfamily, etc. to filenames using fonts found in the workspace and the system font index. Required because BusyTeX's WASM engine lacks fontconfig and cannot resolve font family names."
+        },
+        "texwasm.systemFontDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional directories to scan for system fonts (in addition to the OS defaults: C:\\Windows\\Fonts, /usr/share/fonts, /Library/Fonts, etc.). Useful for project-local fonts or non-standard install locations."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "node esbuild.config.js",
+    "compile-test": "node esbuild.config.js --test",
+    "watch": "node esbuild.config.js --watch",
+    "lint": "biome lint src",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run compile && npm run compile-test && node dist/test/runTest.js",
+    "test:unit": "mocha",
+    "package": "vsce package",
+    "clean": "rimraf dist .vscode-test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.6",
+    "@types/adm-zip": "0.5.8",
+    "@types/mocha": "10.0.10",
+    "@types/node": "26.1.2",
+    "@types/vscode": "1.125.0",
+    "@vscode/test-electron": "3.1.0",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.1",
+    "glob": "13.0.6",
+    "mocha": "11.7.6",
+    "rimraf": "6.1.3",
+    "tsx": "4.23.1",
+    "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "adm-zip": "0.6.0",
+    "tar": "7.5.22"
+  }
+}

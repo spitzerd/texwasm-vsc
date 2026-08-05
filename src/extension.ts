@@ -1,0 +1,226 @@
+import * as vscode from "vscode";
+import { AssetManager } from "./cache/assetManager";
+import { PackageCache } from "./cache/packageCache";
+import { cleanAuxiliaryFiles } from "./commands/clean";
+import {
+	compileDocument,
+	setCompiler,
+	setPackageCache,
+	setStatusChangeHandler,
+} from "./commands/compile";
+import { compileWith } from "./commands/compileWith";
+import { setCompilerRef, stopCompilation } from "./commands/stop";
+import { synctexForward } from "./commands/synctex";
+import { viewLog } from "./commands/viewLog";
+import { getAutoCompile } from "./config/settings";
+import { clearDiagnostics } from "./diagnostics/latexDiagnostics";
+import { Compiler } from "./engine/compiler";
+import type { StatusState } from "./engine/types";
+import { appendLog, disposeOutputChannel } from "./output/outputChannel";
+import { getFontIndexDir } from "./cache/storage";
+import { getOrBuildSystemFontIndex, invalidateSystemFontIndex } from "./utils/systemFonts";
+
+let statusBarItem: vscode.StatusBarItem;
+let statusState: StatusState = "idle";
+
+export function activate(context: vscode.ExtensionContext): void {
+	appendLog("[TeXWASM] Activating extension...");
+
+	const compiler = new Compiler(context);
+	const pkgCache = new PackageCache(context);
+	pkgCache.setDocstripHandler((files) => compiler.docstrip(files));
+
+	setCompiler(compiler);
+	setPackageCache(pkgCache);
+	setCompilerRef(compiler);
+
+	statusBarItem = vscode.window.createStatusBarItem(
+		vscode.StatusBarAlignment.Right,
+		100,
+	);
+	statusBarItem.command = "texwasm.compile";
+	updateStatusBar("idle");
+	statusBarItem.show();
+
+	setStatusChangeHandler((state: StatusState, _message?: string) => {
+		statusState = state;
+		updateStatusBar(state);
+	});
+
+	const compileCmd = vscode.commands.registerCommand("texwasm.compile", () => {
+		compileDocument();
+	});
+
+	const compileWithCmd = vscode.commands.registerCommand(
+		"texwasm.compileWith",
+		() => {
+			compileWith();
+		},
+	);
+
+	const viewLogCmd = vscode.commands.registerCommand("texwasm.viewLog", () => {
+		viewLog();
+	});
+
+	const cleanCmd = vscode.commands.registerCommand("texwasm.clean", () => {
+		cleanAuxiliaryFiles();
+	});
+
+	const stopCmd = vscode.commands.registerCommand("texwasm.stop", () => {
+		stopCompilation();
+	});
+
+	const synctexCmd = vscode.commands.registerCommand(
+		"texwasm.synctexForward",
+		() => {
+			synctexForward();
+		},
+	);
+
+	const downloadEngineCmd = vscode.commands.registerCommand(
+		"texwasm.downloadEngine",
+		async () => {
+			const assetManager = new AssetManager(context);
+			const result = await assetManager.ensureAssets();
+			const biberResult = await assetManager.ensureBiber();
+			if (result && biberResult) {
+				vscode.window.showInformationMessage("TeXWASM: Engine assets ready.");
+			} else {
+				const msg = "TeXWASM: Failed to download engine assets.";
+				vscode.window.showErrorMessage(msg);
+				throw new Error(msg);
+			}
+		},
+	);
+
+	const clearPkgCacheCmd = vscode.commands.registerCommand(
+		"texwasm.clearPackageCache",
+		async () => {
+			pkgCache.clearCache();
+			vscode.window.showInformationMessage("TeXWASM: Package cache cleared.");
+		},
+	);
+
+	const listPkgCacheCmd = vscode.commands.registerCommand(
+		"texwasm.listPackageCache",
+		async () => {
+			const pkgs = pkgCache.listCachedPackages();
+			if (pkgs.length === 0) {
+				vscode.window.showInformationMessage("TeXWASM: No packages in cache.");
+			} else {
+				vscode.window.showInformationMessage(
+					`TeXWASM: ${pkgs.length} cached package(s): ${pkgs.join(", ")}`,
+				);
+			}
+		},
+	);
+
+	const rebuildFontIndexCmd = vscode.commands.registerCommand(
+		"texwasm.rebuildFontIndex",
+		async () => {
+			const cacheDir = getFontIndexDir(context);
+			await invalidateSystemFontIndex(cacheDir);
+			const index = await getOrBuildSystemFontIndex(cacheDir, {
+				onProgress: (msg) => appendLog(`[TeXWASM] ${msg}`),
+			});
+			vscode.window.showInformationMessage(
+				`TeXWASM: Indexed ${index.size} system font(s).`,
+			);
+		},
+	);
+
+	const autoCompileDisposable = vscode.workspace.onDidSaveTextDocument(
+		(document) => {
+			if (
+				document.languageId === "latex" &&
+				getAutoCompile() &&
+				statusState !== "compiling"
+			) {
+				compileDocument(document.uri);
+			}
+		},
+	);
+
+	// Proactively download the texlive-extra bundle when the user enables
+	// texwasm.includeExtraBundle, and tear down any active worker so the next
+	// compile re-initializes with the new bundle flag (the worker only reads
+	// the flag in its init handler — see wasmWorker.ts handleInit).
+	const configChangeDisposable = vscode.workspace.onDidChangeConfiguration(
+		(e) => {
+			if (!e.affectsConfiguration("texwasm.includeExtraBundle")) {
+				return;
+			}
+
+			const includeExtra = vscode.workspace
+				.getConfiguration("texwasm")
+				.get<boolean>("includeExtraBundle", false);
+
+			// Drop any cached worker so the next compile re-inits with the new flag.
+			compiler.cancel();
+
+			if (includeExtra) {
+				const assetManager = new AssetManager(context);
+				assetManager.ensureAssets().then((ok) => {
+					if (!ok) {
+						vscode.window.showErrorMessage(
+							"TeXWASM: Failed to download the texlive-extra bundle. Run 'TeXWASM: Download/Update Engine' to retry.",
+						);
+					}
+				});
+			}
+		},
+	);
+
+	context.subscriptions.push(
+		compileCmd,
+		compileWithCmd,
+		viewLogCmd,
+		cleanCmd,
+		stopCmd,
+		synctexCmd,
+		downloadEngineCmd,
+		clearPkgCacheCmd,
+		listPkgCacheCmd,
+		rebuildFontIndexCmd,
+		autoCompileDisposable,
+		configChangeDisposable,
+		statusBarItem,
+	);
+
+	appendLog("[TeXWASM] Extension activated.");
+}
+
+export function deactivate(): void {
+	clearDiagnostics();
+	disposeOutputChannel();
+	appendLog("[TeXWASM] Extension deactivated.");
+}
+
+function updateStatusBar(state: StatusState): void {
+	switch (state) {
+		case "idle":
+			statusBarItem.text = "$(server) TeXWASM";
+			statusBarItem.tooltip = "TeXWASM \u2014 Click to compile";
+			statusBarItem.backgroundColor = undefined;
+			break;
+		case "compiling":
+			statusBarItem.text = "$(sync~spin) TeXWASM [compiling...]";
+			statusBarItem.tooltip = "TeXWASM \u2014 Compiling...";
+			statusBarItem.backgroundColor = undefined;
+			break;
+		case "done":
+			statusBarItem.text = "$(check) TeXWASM";
+			statusBarItem.tooltip = "TeXWASM \u2014 Compilation successful";
+			statusBarItem.backgroundColor = new vscode.ThemeColor(
+				"statusBarItem.prominentBackground",
+			);
+			break;
+		case "error":
+			statusBarItem.text = "$(error) TeXWASM";
+			statusBarItem.tooltip = "TeXWASM \u2014 Compilation failed";
+			statusBarItem.backgroundColor = new vscode.ThemeColor(
+				"statusBarItem.errorBackground",
+			);
+			break;
+	}
+}

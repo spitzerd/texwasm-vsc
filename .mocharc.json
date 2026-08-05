@@ -1,0 +1,6 @@
+{
+  "spec": "test/unit/**/*.test.ts",
+  "require": "tsx",
+  "timeout": 10000,
+  "color": true
+}
