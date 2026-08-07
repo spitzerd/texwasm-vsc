@@ -1,0 +1,28 @@
+# Changelog
+
+All notable changes to this project are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [0.1.0] - upcoming
+
+### Added
+
+- Compile LaTeX to PDF via WebAssembly (TeXlyre-BusyTeX), no local TeX distribution required.
+- Multi-engine support: pdfLaTeX, XeLaTeX, LuaLaTeX.
+- Customizable recipes (`pdflatex → bibtex → makeindex → pdflatex × 2`, LaTeX Workshop compatible) with per-tool arguments and environment variables.
+- "Compile with..." command with explicit, magic comment (`% !LW recipe`), and last-used recipe selection.
+- Auto-compile on save (`texwasm.autoCompile`).
+- Diagnostics: errors and warnings from the `.log` shown as VS Code diagnostics.
+- Automatic bibliography processing (bibtex8 or biber) when citations are detected.
+- On-demand CTAN package download with caching (`texwasm.autoDownloadPackages`) and optional texlive-extra bundle (`texwasm.includeExtraBundle`).
+- System font resolution: `fontspec` family names rewritten to filenames via a cached index of OS fonts, plus configurable extra font directories.
+- Root document detection via `% !TEX root`, `\documentclass`, explicit `texwasm.rootDocument` setting, or workspace scan.
+- Magic comment support: `% !TEX program`, `% !TEX root`, `% !LW recipe`, `% !TEX options`.
+- Forward search (SyncTeX) with `Ctrl+Alt+J`.
+- Status bar integration and output channel ("TeXWASM: View Log").
+- Commands: compile, compile with, view log, clean auxiliary files, stop compilation, download/update engine, forward search, clear/list CTAN package cache, rebuild system font index.
+- Keybindings: `Ctrl+Alt+B` (compile) and `Ctrl+Alt+J` (forward search).
+
