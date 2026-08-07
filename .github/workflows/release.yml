@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+      - '[0-9]+.[0-9]+.[0-9]+*'
+
+jobs:
+  release:
+    name: Release & publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm ci && npm i -g @vscode/vsce
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VER="${{ github.ref_name }}"
+          VER="${VER#v}"
+          awk -v ver="$VER" '
+            /^## \[/{if(s) exit; if(index($0,"["ver"]")) s=1; next}
+            s
+          ' CHANGELOG.md > release-notes.md
+
+      - name: Build extension
+        run: npm run compile
+
+      - name: Package extension
+        run: npm run package
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" texwasm-*.vsix -F release-notes.md
+
+      - name: Publish to VS Code Marketplace
+        env:
+          TEXWASM_VSCE_TOKEN: ${{ secrets.TEXWASM_VSCE_TOKEN }}
+        run: vsce publish -p "$TEXWASM_VSCE_TOKEN"
