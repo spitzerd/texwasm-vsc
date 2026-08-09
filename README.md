@@ -4,7 +4,7 @@ A VS Code extension that compiles LaTeX to PDF **without a local TeX distributio
 
 ## Requirements
 
-- VS Code 1.30.0+
+- VS Code 1.96+
 - Internet connection on first use (~100–500MB download for engine assets from [TeXlyre-BusyTeX](https://github.com/TeXlyre/texlyre-busytex-build))
 
 ## Features
